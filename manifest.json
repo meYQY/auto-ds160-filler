@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "Auto DS-160 Filler",
+  "version": "1.0.0",
+  "description": "AI-powered assistant to help you fill US Visa DS-160 forms strictly following official schemas.",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "sidePanel"
+  ],
+  "host_permissions": [
+    "https://ceac.state.gov/*"
+  ],
+  "side_panel": {
+    "default_path": "index.html"
+  },
+  "action": {
+    "default_title": "Auto DS-160 Filler",
+    "default_popup": "index.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://ceac.state.gov/genniv/*"],
+      "js": ["src/scripts/content.ts"],
+      "run_at": "document_end"
+    }
+  ]
+}
+

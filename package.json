@@ -1,0 +1,30 @@
+{
+  "name": "auto-ds160-filler",
+  "version": "1.0.0",
+  "description": "Open Source AI-powered DS-160 Form Filler",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "lucide-react": "^0.300.0",
+    "zod": "^3.22.4",
+    "openai": "^4.24.0"
+  },
+  "devDependencies": {
+    "@crxjs/vite-plugin": "^2.0.0-beta.21",
+    "@types/chrome": "^0.0.258",
+    "@types/react": "^18.2.43",
+    "@types/react-dom": "^18.2.17",
+    "@vitejs/plugin-react": "^4.2.1",
+    "autoprefixer": "^10.4.16",
+    "postcss": "^8.4.32",
+    "tailwindcss": "^3.4.0",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.10"
+  }
+}
+
