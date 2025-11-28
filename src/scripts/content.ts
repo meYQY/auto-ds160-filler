@@ -1,16 +1,18 @@
 import { FIELD_SELECTORS } from '../lib/selectors';
 
 // Helper to wait for elements
-function waitForElement(selector: string, timeout = 2000): Promise<Element | null> {
+function waitForElement(selector: string, timeout = 3000): Promise<Element | null> {
   return new Promise((resolve) => {
-    if (document.querySelector(selector)) {
-      return resolve(document.querySelector(selector));
+    const element = document.querySelector(selector);
+    if (element) {
+      return resolve(element);
     }
 
     const observer = new MutationObserver((mutations) => {
-      if (document.querySelector(selector)) {
+      const el = document.querySelector(selector);
+      if (el) {
         observer.disconnect();
-        resolve(document.querySelector(selector));
+        resolve(el);
       }
     });
 
@@ -21,10 +23,14 @@ function waitForElement(selector: string, timeout = 2000): Promise<Element | nul
 
     setTimeout(() => {
       observer.disconnect();
-      resolve(null);
+      // Try one last time before giving up
+      resolve(document.querySelector(selector));
     }, timeout);
   });
 }
+
+// Helper for delay
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
 // Main filling logic
 async function fillField(selectorDef: any, value: string, type: 'text' | 'select' | 'radio' | 'checkbox') {
@@ -35,14 +41,16 @@ async function fillField(selectorDef: any, value: string, type: 'text' | 'select
   if (typeof selectorDef === 'object' && selectorDef.selector) {
     selector = selectorDef.selector;
     if (selectorDef.mapping) {
-      // Try to map the value (e.g. "CHINA" -> "CHIN")
       // Case-insensitive lookup
       const upperValue = value.toUpperCase();
+      // 1. Try direct match
       if (selectorDef.mapping[upperValue]) {
         mappedValue = selectorDef.mapping[upperValue];
       } else {
-          // If exact match not found, try to match keys partially or values
-          const foundKey = Object.keys(selectorDef.mapping).find(k => k.includes(upperValue) || upperValue.includes(k));
+          // 2. Fuzzy match (key includes value OR value includes key)
+          const foundKey = Object.keys(selectorDef.mapping).find(k => 
+            k.includes(upperValue) || upperValue.includes(k)
+          );
           if (foundKey) {
               mappedValue = selectorDef.mapping[foundKey];
           }
@@ -53,42 +61,60 @@ async function fillField(selectorDef: any, value: string, type: 'text' | 'select
   const element = await waitForElement(selector) as HTMLInputElement | HTMLSelectElement;
   
   if (!element) {
-    console.warn(`Element not found: ${selector}`);
-    return;
+    console.warn(`[Auto DS-160] Element not found or timed out: ${selector}`);
+    return false; // Return failure
   }
 
-  console.log(`Filling ${selector} with ${mappedValue} (Original: ${value})`);
+  console.log(`[Auto DS-160] Filling ${selector} with ${mappedValue} (Original: ${value})`);
 
-  if (type === 'select') {
-    element.value = mappedValue;
-    element.dispatchEvent(new Event('change', { bubbles: true }));
-  } else if (type === 'radio' || type === 'checkbox') {
-    // For radio/checkbox, we usually match the value attribute
-    // Handle boolean mapping (true -> "Y", false -> "N" often)
-    let targetVal = mappedValue;
-    if (typeof mappedValue === 'boolean') {
-        targetVal = mappedValue ? 'Y' : 'N'; // Common DS-160 pattern, might need refinement
-    }
+  // Scroll into view to ensure visibility (helps with some JS interactions)
+  element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  
+  // Small delay after scrolling
+  await sleep(100);
 
-    if (element.value === targetVal) {
-      element.click(); 
+  try {
+    if (type === 'select') {
+      element.value = mappedValue;
+      // Force ASP.NET PostBack events
+      element.dispatchEvent(new Event('change', { bubbles: true }));
+    } else if (type === 'radio' || type === 'checkbox') {
+      let targetVal = mappedValue;
+      if (typeof mappedValue === 'boolean') {
+          targetVal = mappedValue ? 'Y' : 'N';
+      }
+
+      // Check specifically for RadioButtonList structure often used in ASP.NET
+      if (element.value === targetVal) {
+        element.click(); 
+      } else {
+          // Fallback: try to find the input by value in the DOM if selector was a container or generic
+          const radio = document.querySelector(`${selector}[value="${targetVal}"]`) as HTMLInputElement;
+          if (radio) {
+            radio.click();
+          } else {
+            // Last resort: try finding label text? (Skipping for now to keep simple)
+            console.warn(`[Auto DS-160] Could not find radio option: ${targetVal}`);
+          }
+      }
     } else {
-        const radio = document.querySelector(`${selector}[value="${targetVal}"]`) as HTMLInputElement;
-        if (radio) radio.click();
+      element.value = mappedValue;
+      element.dispatchEvent(new Event('input', { bubbles: true }));
+      element.dispatchEvent(new Event('change', { bubbles: true }));
+      element.dispatchEvent(new Event('blur', { bubbles: true }));
     }
-  } else {
-    element.value = mappedValue;
-    element.dispatchEvent(new Event('input', { bubbles: true }));
-    element.dispatchEvent(new Event('change', { bubbles: true }));
-    element.dispatchEvent(new Event('blur', { bubbles: true }));
+    return true; // Success
+  } catch (e) {
+    console.error(`[Auto DS-160] Error filling ${selector}`, e);
+    return false;
   }
 }
 
 // Message Listener
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "FILL_FORM") {
-    handleFillRequest(request.data).then(() => {
-      sendResponse({ status: "success" });
+    handleFillRequest(request.data).then((result) => {
+      sendResponse(result);
     }).catch(err => {
       console.error(err);
       sendResponse({ status: "error", message: err.message });
@@ -100,48 +126,60 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 async function handleFillRequest(data: any) {
   let currentSection = '';
   
-  // Heuristics for section detection
-  if (document.querySelector('#ctl00_SiteContentPlaceHolder_FormView1_tbxAPP_SURNAME')) {
-    currentSection = 'personal_info_1';
-  } else if (document.querySelector('#ctl00_SiteContentPlaceHolder_FormView1_ddlNAT_nationality')) {
-    currentSection = 'personal_info_2';
-  } else if (document.querySelector('#ctl00_SiteContentPlaceHolder_FormView1_tbxAPP_ADDR_LN1')) {
-    currentSection = 'address_and_phone';
-  } else if (document.querySelector('#ctl00_SiteContentPlaceHolder_FormView1_tbxPPT_NUM')) {
-    currentSection = 'passport';
-  } else if (document.querySelector('#ctl00_SiteContentPlaceHolder_FormView1_ddlTRAVEL_PURPOSE')) {
-    currentSection = 'travel';
-  } else if (document.querySelector('#ctl00_SiteContentPlaceHolder_FormView1_tbxFATHER_SURNAME')) {
-    currentSection = 'family';
-  } else if (document.querySelector('#ctl00_SiteContentPlaceHolder_FormView1_ddlPRESENT_OCCUPATION')) {
-    currentSection = 'work_education';
+  // Section Detection Heuristics
+  // We use "unique" field IDs to guess which page we are on
+  const DETECTORS = {
+    'personal_info_1': '#ctl00_SiteContentPlaceHolder_FormView1_tbxAPP_SURNAME',
+    'personal_info_2': '#ctl00_SiteContentPlaceHolder_FormView1_ddlNAT_nationality',
+    'address_and_phone': '#ctl00_SiteContentPlaceHolder_FormView1_tbxAPP_ADDR_LN1',
+    'passport': '#ctl00_SiteContentPlaceHolder_FormView1_tbxPPT_NUM',
+    'travel': '#ctl00_SiteContentPlaceHolder_FormView1_ddlTRAVEL_PURPOSE',
+    'family': '#ctl00_SiteContentPlaceHolder_FormView1_tbxFATHER_SURNAME',
+    'work_education': '#ctl00_SiteContentPlaceHolder_FormView1_ddlPRESENT_OCCUPATION',
+    'security': 'input[name$="rblSECURITY_DISEASE"]' // Heuristic for security page
+  };
+
+  for (const [section, selector] of Object.entries(DETECTORS)) {
+    if (document.querySelector(selector)) {
+      currentSection = section;
+      break;
+    }
   }
 
   if (!currentSection || !FIELD_SELECTORS[currentSection]) {
-    alert("Auto DS-160 Filler: Could not detect a supported DS-160 section on this page.");
-    return;
+    alert("Auto DS-160 Filler: Could not detect a supported DS-160 section on this page. Please navigate to a supported section.");
+    return { status: "error", message: "Unknown section" };
   }
 
   const sectionSelectors = FIELD_SELECTORS[currentSection];
   const sectionData = data[currentSection];
 
   if (!sectionData) {
-    alert(`Auto DS-160 Filler: No data found for section ${currentSection}`);
-    return;
+    alert(`Auto DS-160 Filler: No data found for section '${currentSection}'. Please check your input.`);
+    return { status: "warning", message: "No data for section" };
   }
+
+  let filledCount = 0;
 
   // Iterate and fill
   for (const [key, selectorDef] of Object.entries(sectionSelectors)) {
     const value = sectionData[key];
-    if (!value) continue;
+    if (value === undefined || value === null || value === '') continue;
+
+    // Add delay between fields to prevent "Race Conditions" with ASP.NET PostBacks
+    // This is CRITICAL for DS-160 stability
+    await sleep(300); 
 
     if (typeof selectorDef === 'object' && selectorDef.year) {
        // Handle Date (Split fields)
        const dateParts = value.split('-'); // Assuming YYYY-MM-DD
        if (dateParts.length === 3) {
          await fillField(selectorDef.year, dateParts[0], 'select');
-         await fillField(selectorDef.month, dateParts[1], 'select'); // Month might need mapping 01->JAN
+         await sleep(100);
+         await fillField(selectorDef.month, dateParts[1], 'select'); 
+         await sleep(100);
          await fillField(selectorDef.day, parseInt(dateParts[2]).toString(), 'select');
+         filledCount++;
        }
     } else {
         // Determine type
@@ -151,9 +189,12 @@ async function handleFillRequest(data: any) {
         if (selectorStr.includes('ddl')) type = 'select';
         if (selectorStr.includes('rbl') || selectorStr.includes('radio')) type = 'radio';
         
-        await fillField(selectorDef, value, type);
+        const success = await fillField(selectorDef, value, type);
+        if (success) filledCount++;
     }
   }
   
-  alert("Auto DS-160 Filler: Filling completed for this section.");
+  const msg = `Auto DS-160 Filler: Successfully filled ${filledCount} fields in ${currentSection}.`;
+  alert(msg);
+  return { status: "success", message: msg };
 }

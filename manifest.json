@@ -6,15 +6,11 @@
   "permissions": [
     "activeTab",
     "scripting",
-    "storage",
-    "sidePanel"
+    "storage"
   ],
   "host_permissions": [
     "https://ceac.state.gov/*"
   ],
-  "side_panel": {
-    "default_path": "index.html"
-  },
   "action": {
     "default_title": "Auto DS-160 Filler",
     "default_popup": "index.html"
