@@ -27,7 +27,29 @@ function waitForElement(selector: string, timeout = 2000): Promise<Element | nul
 }
 
 // Main filling logic
-async function fillField(selector: string, value: string, type: 'text' | 'select' | 'radio' | 'checkbox') {
+async function fillField(selectorDef: any, value: string, type: 'text' | 'select' | 'radio' | 'checkbox') {
+  let selector = selectorDef;
+  let mappedValue = value;
+
+  // Handle object definition with mapping
+  if (typeof selectorDef === 'object' && selectorDef.selector) {
+    selector = selectorDef.selector;
+    if (selectorDef.mapping) {
+      // Try to map the value (e.g. "CHINA" -> "CHIN")
+      // Case-insensitive lookup
+      const upperValue = value.toUpperCase();
+      if (selectorDef.mapping[upperValue]) {
+        mappedValue = selectorDef.mapping[upperValue];
+      } else {
+          // If exact match not found, try to match keys partially or values
+          const foundKey = Object.keys(selectorDef.mapping).find(k => k.includes(upperValue) || upperValue.includes(k));
+          if (foundKey) {
+              mappedValue = selectorDef.mapping[foundKey];
+          }
+      }
+    }
+  }
+
   const element = await waitForElement(selector) as HTMLInputElement | HTMLSelectElement;
   
   if (!element) {
@@ -35,25 +57,30 @@ async function fillField(selector: string, value: string, type: 'text' | 'select
     return;
   }
 
-  console.log(`Filling ${selector} with ${value}`);
+  console.log(`Filling ${selector} with ${mappedValue} (Original: ${value})`);
 
   if (type === 'select') {
-    element.value = value;
+    element.value = mappedValue;
     element.dispatchEvent(new Event('change', { bubbles: true }));
   } else if (type === 'radio' || type === 'checkbox') {
-    // For radio, the selector usually points to a group or we need to find the specific value
-    if (element.value === value) {
+    // For radio/checkbox, we usually match the value attribute
+    // Handle boolean mapping (true -> "Y", false -> "N" often)
+    let targetVal = mappedValue;
+    if (typeof mappedValue === 'boolean') {
+        targetVal = mappedValue ? 'Y' : 'N'; // Common DS-160 pattern, might need refinement
+    }
+
+    if (element.value === targetVal) {
       element.click(); 
     } else {
-        // Try to find the specific radio button by value if the selector was generic
-        const radio = document.querySelector(`${selector}[value="${value}"]`) as HTMLInputElement;
+        const radio = document.querySelector(`${selector}[value="${targetVal}"]`) as HTMLInputElement;
         if (radio) radio.click();
     }
   } else {
-    element.value = value;
+    element.value = mappedValue;
     element.dispatchEvent(new Event('input', { bubbles: true }));
     element.dispatchEvent(new Event('change', { bubbles: true }));
-    element.dispatchEvent(new Event('blur', { bubbles: true })); // Important for validation trigger
+    element.dispatchEvent(new Event('blur', { bubbles: true }));
   }
 }
 
@@ -71,10 +98,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 async function handleFillRequest(data: any) {
-  // Detect current page section by looking for unique elements
   let currentSection = '';
   
-  // Simple heuristic: Look for specific IDs present on the page to identify section
+  // Heuristics for section detection
   if (document.querySelector('#ctl00_SiteContentPlaceHolder_FormView1_tbxAPP_SURNAME')) {
     currentSection = 'personal_info_1';
   } else if (document.querySelector('#ctl00_SiteContentPlaceHolder_FormView1_ddlNAT_nationality')) {
@@ -105,25 +131,27 @@ async function handleFillRequest(data: any) {
   }
 
   // Iterate and fill
-  for (const [key, selector] of Object.entries(sectionSelectors)) {
+  for (const [key, selectorDef] of Object.entries(sectionSelectors)) {
     const value = sectionData[key];
     if (!value) continue;
 
-    if (typeof selector === 'object' && selector.year) {
+    if (typeof selectorDef === 'object' && selectorDef.year) {
        // Handle Date (Split fields)
        const dateParts = value.split('-'); // Assuming YYYY-MM-DD
        if (dateParts.length === 3) {
-         await fillField(selector.year, dateParts[0], 'select');
-         await fillField(selector.month, dateParts[1], 'select'); // Note: Value might need mapping if select is by index or name
-         await fillField(selector.day, parseInt(dateParts[2]).toString(), 'select');
+         await fillField(selectorDef.year, dateParts[0], 'select');
+         await fillField(selectorDef.month, dateParts[1], 'select'); // Month might need mapping 01->JAN
+         await fillField(selectorDef.day, parseInt(dateParts[2]).toString(), 'select');
        }
-    } else if (typeof selector === 'string') {
-        // Determine type (simplified logic)
+    } else {
+        // Determine type
         let type: any = 'text';
-        if (selector.includes('ddl')) type = 'select';
-        if (selector.includes('rbl') || selector.includes('radio')) type = 'radio';
+        let selectorStr = typeof selectorDef === 'string' ? selectorDef : selectorDef.selector;
         
-        await fillField(selector, value, type);
+        if (selectorStr.includes('ddl')) type = 'select';
+        if (selectorStr.includes('rbl') || selectorStr.includes('radio')) type = 'radio';
+        
+        await fillField(selectorDef, value, type);
     }
   }
   

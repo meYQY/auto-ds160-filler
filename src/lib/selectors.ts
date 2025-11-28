@@ -1,5 +1,6 @@
 // Extracted from backend/app/api/v1/endpoints/rpa.py & extensive research
 // Most IDs follow pattern: #ctl00_SiteContentPlaceHolder_FormView1_...
+import { COUNTRIES, RELATIONSHIPS, VISA_CLASSES, MARITAL_STATUS } from './constants';
 
 const PREFIX = "#ctl00_SiteContentPlaceHolder_FormView1_";
 
@@ -8,8 +9,8 @@ export const FIELD_SELECTORS: Record<string, any> = {
     surname: `${PREFIX}tbxAPP_SURNAME`,
     given_names: `${PREFIX}tbxAPP_GIVEN_NAME`,
     full_name_native: `${PREFIX}tbxAPP_FULL_NAME_NATIVE`,
-    sex: `input[name$='rblAPP_GENDER']`, // often a radio button list
-    marital_status: `${PREFIX}ddlAPP_MARITAL_STATUS`,
+    sex: `input[name$='rblAPP_GENDER']`, 
+    marital_status: { selector: `${PREFIX}ddlAPP_MARITAL_STATUS`, mapping: MARITAL_STATUS },
     date_of_birth: {
       day: `${PREFIX}ddlDOBDay`,
       month: `${PREFIX}ddlDOBMonth`,
@@ -17,10 +18,10 @@ export const FIELD_SELECTORS: Record<string, any> = {
     },
     city_of_birth: `${PREFIX}tbxDOB_CITY`,
     state_province_of_birth: `${PREFIX}tbxDOB_STATE`,
-    country_of_birth: `${PREFIX}ddlDOB_CNTRY`,
+    country_of_birth: { selector: `${PREFIX}ddlDOB_CNTRY`, mapping: COUNTRIES },
   },
   personal_info_2: {
-    nationality: `${PREFIX}ddlNAT_nationality`,
+    nationality: { selector: `${PREFIX}ddlNAT_nationality`, mapping: COUNTRIES },
     national_id_number: `${PREFIX}tbxNAT_ID_NUM`,
     us_social_security_number: `${PREFIX}tbxSSN_NUM`,
     us_taxpayer_id_number: `${PREFIX}tbxTAX_NUM`,
@@ -30,14 +31,14 @@ export const FIELD_SELECTORS: Record<string, any> = {
     home_city: `${PREFIX}tbxAPP_ADDR_CITY`,
     home_state_province: `${PREFIX}tbxAPP_ADDR_STATE`,
     home_postal_zone: `${PREFIX}tbxAPP_ADDR_POSTAL_CD`,
-    home_country: `${PREFIX}ddlAPP_ADDR_CNTRY`,
+    home_country: { selector: `${PREFIX}ddlAPP_ADDR_CNTRY`, mapping: COUNTRIES },
     mobile_phone: `${PREFIX}tbxAPP_MOBILE_TEL`,
     email_address: `${PREFIX}tbxAPP_EMAIL_ADDR`,
   },
   passport: {
     passport_number: `${PREFIX}tbxPPT_NUM`,
     passport_book_number: `${PREFIX}tbxPPT_BOOK_NUM`,
-    issuing_country: `${PREFIX}ddlPPT_ISSUED_CNTRY`,
+    issuing_country: { selector: `${PREFIX}ddlPPT_ISSUED_CNTRY`, mapping: COUNTRIES },
     issue_date: {
       day: `${PREFIX}ddlPPT_ISSUEDDay`,
       month: `${PREFIX}ddlPPT_ISSUEDMonth`,
@@ -50,7 +51,7 @@ export const FIELD_SELECTORS: Record<string, any> = {
     },
   },
   travel: {
-    purpose_of_trip: `${PREFIX}ddlTRAVEL_PURPOSE`,
+    purpose_of_trip: { selector: `${PREFIX}ddlTRAVEL_PURPOSE`, mapping: VISA_CLASSES },
     intended_date_of_arrival: {
       day: `${PREFIX}ddlARRIVALDay`,
       month: `${PREFIX}ddlARRIVALMonth`,
@@ -74,7 +75,7 @@ export const FIELD_SELECTORS: Record<string, any> = {
     contact_person_surname: `${PREFIX}tbxUS_CONTACT_SURNAME`,
     contact_person_given_names: `${PREFIX}tbxUS_CONTACT_GIVEN_NAME`,
     organization_name: `${PREFIX}tbxUS_CONTACT_ORG`,
-    relationship: `${PREFIX}ddlUS_CONTACT_REL`,
+    relationship: { selector: `${PREFIX}ddlUS_CONTACT_REL`, mapping: RELATIONSHIPS },
     us_address: `${PREFIX}tbxUS_CONTACT_ADDR_LN1`,
     phone_number: `${PREFIX}tbxUS_CONTACT_PHONE`,
     email_address: `${PREFIX}tbxUS_CONTACT_EMAIL`,
@@ -105,17 +106,9 @@ export const FIELD_SELECTORS: Record<string, any> = {
     job_duties: `${PREFIX}tbxPRESENT_DUTIES`,
   },
   security: {
-    // Security questions usually have a standard pattern of Yes/No radio buttons
     has_communicable_disease: `input[name$='rblSECURITY_DISEASE']`,
     has_criminal_record: `input[name$='rblSECURITY_CRIMINAL']`,
   }
 };
 
-// Map internal country codes to DS-160 select values if needed
-export const COUNTRY_MAPPING: Record<string, string> = {
-  "CHINA": "CHIN",
-  "USA": "USA",
-  "HONG KONG": "HOKO",
-  "TAIWAN": "TAIW",
-  // ... add more as needed
-};
+export { COUNTRIES, RELATIONSHIPS, VISA_CLASSES, MARITAL_STATUS };
