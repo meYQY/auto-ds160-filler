@@ -94,8 +94,11 @@
 
 - [x] 个人信息板块 (Personal Information)
 - [x] 护照信息板块 (Passport Information)
-- [ ] 旅行计划与同行人 (Travel History)
-- [ ] 教育与工作经历 (Education & Work)
+- [x] 旅行计划与同行人 (Travel History)
+- [x] 教育与工作经历 (Education & Work)
+- [x] 家庭信息 (父母与配偶)
+- [x] 地址与联系方式
+- [x] 安全背景调查 (基础支持)
 - [ ] 照片合规性 AI 检查
 - [ ] 导出 PDF 备份
 

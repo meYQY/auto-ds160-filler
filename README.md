@@ -96,8 +96,11 @@ This project is currently in **Developer Preview**.
 
 - [x] Personal Information Section
 - [x] Passport Information Section
-- [ ] Travel History & Companions
-- [ ] Education & Work History
+- [x] Travel History & Companions
+- [x] Education & Work History
+- [x] Family Information (Parents & Spouse)
+- [x] Address & Phone Information
+- [x] Security Questions (Basic Support)
 - [ ] Photo Validation Helper
 - [ ] PDF Export
 
