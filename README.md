@@ -19,13 +19,6 @@
 
 <br/>
 
-<div align="center">
-  <!-- 建议在这里放一张 GIF 演示，比如：assets/demo.gif -->
-  <img src="https://via.placeholder.com/800x400?text=Demo+Preview+Placeholder" alt="Demo Preview" width="100%" style="border-radius: 8px; border: 1px solid #eee;">
-</div>
-
-<br/>
-
 ## Introduction
 
 **Auto DS-160 Filler** is an open-source Chrome Extension designed to modernize the painful experience of the US Visa application process (CEAC website).
@@ -50,6 +43,14 @@ Instead of manually filling out 100+ fields, simply describe your information in
 
 - 🔌 **One-Click Auto-Fill**
   Injects data into the legacy CEAC system via standard DOM manipulation.
+
+## About
+
+We are a group of developers and visa consultants who were tired of the archaic DS-160 system.
+
+This project originated from **PipelineVisa**, an enterprise-grade visa processing system. We realized that the "auto-fill" component was too valuable to keep closed-source. By extracting this core technology, we hope to help individual travelers and families save time and reduce errors.
+
+While this extension is free and open-source, it is built with the same rigorous standards we use for our commercial clients.
 
 ## Quick Start
 
