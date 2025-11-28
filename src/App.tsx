@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { AIService } from './services/ai';
 import { DS160FormData } from './types/ds160';
 import { Settings, MessageSquare, ClipboardCheck, Play, Trash2 } from 'lucide-react';
@@ -8,7 +8,8 @@ function App() {
   const [apiKey, setApiKey] = useState('');
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [formData, setFormData] = useState<DS160FormData>({});
+  // Fix: Initialize with partial empty object cast as DS160FormData
+  const [formData, setFormData] = useState<DS160FormData>({} as DS160FormData);
   const [logs, setLogs] = useState<string[]>([]);
   const logEndRef = useRef<HTMLDivElement>(null);
 
@@ -46,7 +47,7 @@ function App() {
 
   const handleClearData = () => {
       if (confirm("Are you sure you want to clear all form data?")) {
-          setFormData({});
+          setFormData({} as DS160FormData);
           chrome.storage.local.remove(['ds160_data']);
           setLogs(prev => [...prev, "Form data cleared."]);
       }
@@ -231,7 +232,7 @@ function App() {
 
       {/* Logs */}
       <div className="bg-gray-900 text-green-400 p-2 text-[10px] font-mono h-20 overflow-auto border-t border-gray-800">
-        {logs.length === 0 && <div className="opacity-50">> Ready.</div>}
+        {logs.length === 0 && <div className="opacity-50">&gt; Ready.</div>}
         {logs.map((log, i) => <div key={i} className="whitespace-nowrap">{`> ${log}`}</div>)}
         <div ref={logEndRef} />
       </div>

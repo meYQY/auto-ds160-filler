@@ -8,7 +8,7 @@ function waitForElement(selector: string, timeout = 3000): Promise<Element | nul
       return resolve(element);
     }
 
-    const observer = new MutationObserver((mutations) => {
+    const observer = new MutationObserver(() => {
       const el = document.querySelector(selector);
       if (el) {
         observer.disconnect();
@@ -38,24 +38,31 @@ async function fillField(selectorDef: any, value: string, type: 'text' | 'select
   let mappedValue = value;
 
   // Handle object definition with mapping
-  if (typeof selectorDef === 'object' && selectorDef.selector) {
+  if (typeof selectorDef === 'object' && selectorDef !== null && 'selector' in selectorDef) {
     selector = selectorDef.selector;
-    if (selectorDef.mapping) {
+    if ('mapping' in selectorDef && selectorDef.mapping) {
+      const mapping = selectorDef.mapping as Record<string, string>;
       // Case-insensitive lookup
       const upperValue = value.toUpperCase();
       // 1. Try direct match
-      if (selectorDef.mapping[upperValue]) {
-        mappedValue = selectorDef.mapping[upperValue];
+      if (mapping[upperValue]) {
+        mappedValue = mapping[upperValue];
       } else {
           // 2. Fuzzy match (key includes value OR value includes key)
-          const foundKey = Object.keys(selectorDef.mapping).find(k => 
+          const foundKey = Object.keys(mapping).find(k => 
             k.includes(upperValue) || upperValue.includes(k)
           );
           if (foundKey) {
-              mappedValue = selectorDef.mapping[foundKey];
+              mappedValue = mapping[foundKey];
           }
       }
     }
+  }
+
+  // Ensure selector is a string before querying
+  if (typeof selector !== 'string') {
+      console.warn(`[Auto DS-160] Invalid selector type: ${typeof selector}`);
+      return false;
   }
 
   const element = await waitForElement(selector) as HTMLInputElement | HTMLSelectElement;
@@ -111,7 +118,7 @@ async function fillField(selectorDef: any, value: string, type: 'text' | 'select
 }
 
 // Message Listener
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
   if (request.action === "FILL_FORM") {
     handleFillRequest(request.data).then((result) => {
       sendResponse(result);
@@ -170,27 +177,41 @@ async function handleFillRequest(data: any) {
     // This is CRITICAL for DS-160 stability
     await sleep(300); 
 
-    if (typeof selectorDef === 'object' && selectorDef.year) {
+    // Check if selectorDef is an object with 'year', 'month', 'day' properties (for Date)
+    // Using 'in' operator for type narrowing
+    if (typeof selectorDef === 'object' && selectorDef !== null && 'year' in selectorDef) {
        // Handle Date (Split fields)
+       // Type assertion since we checked 'year' exists, but we need to be sure it's the date structure
+       const dateSelector = selectorDef as { year: string; month: string; day: string };
+       
        const dateParts = value.split('-'); // Assuming YYYY-MM-DD
        if (dateParts.length === 3) {
-         await fillField(selectorDef.year, dateParts[0], 'select');
+         await fillField(dateSelector.year, dateParts[0], 'select');
          await sleep(100);
-         await fillField(selectorDef.month, dateParts[1], 'select'); 
+         await fillField(dateSelector.month, dateParts[1], 'select'); 
          await sleep(100);
-         await fillField(selectorDef.day, parseInt(dateParts[2]).toString(), 'select');
+         await fillField(dateSelector.day, parseInt(dateParts[2]).toString(), 'select');
          filledCount++;
        }
     } else {
         // Determine type
         let type: any = 'text';
-        let selectorStr = typeof selectorDef === 'string' ? selectorDef : selectorDef.selector;
+        // Handle both string selector and object selector with 'selector' property
+        let selectorStr = '';
         
-        if (selectorStr.includes('ddl')) type = 'select';
-        if (selectorStr.includes('rbl') || selectorStr.includes('radio')) type = 'radio';
-        
-        const success = await fillField(selectorDef, value, type);
-        if (success) filledCount++;
+        if (typeof selectorDef === 'string') {
+            selectorStr = selectorDef;
+        } else if (typeof selectorDef === 'object' && selectorDef !== null && 'selector' in selectorDef) {
+            selectorStr = (selectorDef as any).selector;
+        }
+
+        if (selectorStr) {
+            if (selectorStr.includes('ddl')) type = 'select';
+            if (selectorStr.includes('rbl') || selectorStr.includes('radio')) type = 'radio';
+            
+            const success = await fillField(selectorDef, value, type);
+            if (success) filledCount++;
+        }
     }
   }
   
