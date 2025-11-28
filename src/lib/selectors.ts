@@ -1,4 +1,4 @@
-import { COUNTRIES, RELATIONSHIPS, VISA_CLASSES, MARITAL_STATUS } from './constants';
+import { COUNTRIES, RELATIONSHIPS, VISA_CLASSES, MARITAL_STATUS, GENDERS } from './constants';
 
 // Use partial IDs for fuzzy matching to be more robust against ASP.NET ID changes
 // We will match elements where id ENDS WITH these strings or CONTAINS them
@@ -8,7 +8,7 @@ export const FIELD_SELECTORS: Record<string, any> = {
     surname: `tbxAPP_SURNAME`,
     given_names: `tbxAPP_GIVEN_NAME`,
     full_name_native: `tbxAPP_FULL_NAME_NATIVE`,
-    sex: `rblAPP_GENDER`, 
+    sex: { selector: `rblAPP_GENDER`, mapping: GENDERS },
     marital_status: { selector: `ddlAPP_MARITAL_STATUS`, mapping: MARITAL_STATUS },
     date_of_birth: {
       day: `ddlDOBDay`,
@@ -91,4 +91,4 @@ export const FIELD_SELECTORS: Record<string, any> = {
   }
 };
 
-export { COUNTRIES, RELATIONSHIPS, VISA_CLASSES, MARITAL_STATUS };
+export { COUNTRIES, RELATIONSHIPS, VISA_CLASSES, MARITAL_STATUS, GENDERS };

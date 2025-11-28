@@ -185,7 +185,8 @@ async function handleFillRequest(data: any) {
        if (dateParts.length === 3) {
          await fillField(dateSelector.year, dateParts[0], 'select');
          await sleep(100);
-         await fillField(dateSelector.month, dateParts[1], 'select'); 
+         // DS-160 expects "1", "2", etc. for day/month, not "01", "02"
+         await fillField(dateSelector.month, parseInt(dateParts[1]).toString(), 'select'); 
          await sleep(100);
          await fillField(dateSelector.day, parseInt(dateParts[2]).toString(), 'select');
          filledCount++;

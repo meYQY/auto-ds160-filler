@@ -1,25 +1,14 @@
-// Official DS-160 Enumerations & Constants
-// Extracted from official form data
-
 export const COUNTRIES: Record<string, string> = {
   "CHINA": "CHIN",
-  "HONG KONG": "HOKO",
-  "TAIWAN": "TAIW",
-  "MACAU": "MACU",
   "UNITED STATES": "USA",
-  "CANADA": "CANA",
-  "UNITED KINGDOM": "GRBR",
-  "JAPAN": "JAPA",
-  "SOUTH KOREA": "SKOR",
-  "GERMANY": "GERM",
-  "FRANCE": "FRAN",
+  "CANADA": "CAN",
+  "UNITED KINGDOM": "GBR",
+  "JAPAN": "JPN",
   "AUSTRALIA": "AUS",
-  "SINGAPORE": "SING",
-  "MALAYSIA": "MALA",
-  "THAILAND": "THAI",
-  "VIETNAM": "VM",
+  "GERMANY": "GRM",
+  "FRANCE": "FRN",
   "INDIA": "IND",
-  // ... Common countries, extend as needed
+  // Add more as needed
 };
 
 export const RELATIONSHIPS: Record<string, string> = {
@@ -31,35 +20,31 @@ export const RELATIONSHIPS: Record<string, string> = {
   "OTHER_RELATIVE": "O",
   "FRIEND": "F",
   "BUSINESS_ASSOCIATE": "U",
-  "OTHER": "X",
+  "OTHER": "H",
 };
 
 export const VISA_CLASSES: Record<string, string> = {
-  "B1": "B1",
-  "B2": "B2",
-  "B1/B2": "B1/B2",
-  "F1": "F1",
-  "F2": "F2",
-  "J1": "J1",
-  "J2": "J2",
-  "H1B": "H1B",
-  "L1": "L1",
-  "O1": "O1",
+  "B1/B2": "B",
+  "F1": "F",
+  "H1B": "H",
+  "L1": "L",
+  "O1": "O",
 };
 
 export const MARITAL_STATUS: Record<string, string> = {
-  "MARRIED": "M",
   "SINGLE": "S",
-  "WIDOWED": "W",
+  "MARRIED": "M",
   "DIVORCED": "D",
-  "SEPARATED": "L",
-  "COMMON_LAW_MARRIAGE": "C",
-  "CIVIL_UNION": "P",
+  "WIDOWED": "W",
+  "SEPARATED": "P",
 };
 
-// Security Questions typically map to "Y" (Yes) or "N" (No)
 export const YES_NO: Record<string, string> = {
   "YES": "Y",
   "NO": "N",
 };
 
+export const GENDERS: Record<string, string> = {
+  "MALE": "M",
+  "FEMALE": "F",
+};
