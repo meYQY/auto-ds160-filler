@@ -26,7 +26,7 @@ function waitForElement(selector: string, timeout = 2000): Promise<Element | nul
   });
 }
 
-// Main filling logic - Ported from backend/app/services/data_export.py
+// Main filling logic
 async function fillField(selector: string, value: string, type: 'text' | 'select' | 'radio' | 'checkbox') {
   const element = await waitForElement(selector) as HTMLInputElement | HTMLSelectElement;
   
@@ -71,14 +71,24 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 async function handleFillRequest(data: any) {
-  // Detect current page section
-  // Simple heuristic: Look for specific IDs present on the page
+  // Detect current page section by looking for unique elements
   let currentSection = '';
   
+  // Simple heuristic: Look for specific IDs present on the page to identify section
   if (document.querySelector('#ctl00_SiteContentPlaceHolder_FormView1_tbxAPP_SURNAME')) {
     currentSection = 'personal_info_1';
+  } else if (document.querySelector('#ctl00_SiteContentPlaceHolder_FormView1_ddlNAT_nationality')) {
+    currentSection = 'personal_info_2';
+  } else if (document.querySelector('#ctl00_SiteContentPlaceHolder_FormView1_tbxAPP_ADDR_LN1')) {
+    currentSection = 'address_and_phone';
   } else if (document.querySelector('#ctl00_SiteContentPlaceHolder_FormView1_tbxPPT_NUM')) {
     currentSection = 'passport';
+  } else if (document.querySelector('#ctl00_SiteContentPlaceHolder_FormView1_ddlTRAVEL_PURPOSE')) {
+    currentSection = 'travel';
+  } else if (document.querySelector('#ctl00_SiteContentPlaceHolder_FormView1_tbxFATHER_SURNAME')) {
+    currentSection = 'family';
+  } else if (document.querySelector('#ctl00_SiteContentPlaceHolder_FormView1_ddlPRESENT_OCCUPATION')) {
+    currentSection = 'work_education';
   }
 
   if (!currentSection || !FIELD_SELECTORS[currentSection]) {
@@ -108,7 +118,7 @@ async function handleFillRequest(data: any) {
          await fillField(selector.day, parseInt(dateParts[2]).toString(), 'select');
        }
     } else if (typeof selector === 'string') {
-        // Determine type (simplified)
+        // Determine type (simplified logic)
         let type: any = 'text';
         if (selector.includes('ddl')) type = 'select';
         if (selector.includes('rbl') || selector.includes('radio')) type = 'radio';
@@ -119,4 +129,3 @@ async function handleFillRequest(data: any) {
   
   alert("Auto DS-160 Filler: Filling completed for this section.");
 }
-
