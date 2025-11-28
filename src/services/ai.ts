@@ -9,14 +9,42 @@ Strictly follow this JSON schema for output:
     "surname": "string",
     "given_names": "string",
     "sex": "MALE" | "FEMALE",
-    "marital_status": "SINGLE" | "MARRIED" | "..."
+    "marital_status": "SINGLE" | "MARRIED" | "DIVORCED" | "WIDOWED",
     "date_of_birth": "YYYY-MM-DD",
     "city_of_birth": "string",
-    "country_of_birth": "string (use ISO 3-letter code if possible)"
+    "country_of_birth": "string (ISO 3-letter code)"
+  },
+  "personal_info_2": {
+    "nationality": "string (ISO 3-letter code)",
+    "national_id_number": "string"
+  },
+  "address_and_phone": {
+    "home_street_address": "string",
+    "home_city": "string",
+    "mobile_phone": "string",
+    "email_address": "string"
   },
   "passport": {
     "passport_number": "string",
-    "issuing_country": "string"
+    "issuing_country": "string (ISO 3-letter code)",
+    "issue_date": "YYYY-MM-DD",
+    "expiry_date": "YYYY-MM-DD"
+  },
+  "travel": {
+    "purpose_of_trip": "B1/B2",
+    "intended_date_of_arrival": "YYYY-MM-DD",
+    "intended_length_of_stay": "string"
+  },
+  "family": {
+    "father_surname": "string",
+    "father_given_names": "string",
+    "mother_surname": "string",
+    "mother_given_names": "string"
+  },
+  "work_education": {
+    "primary_occupation": "string",
+    "present_employer_name": "string",
+    "monthly_income": "string"
   },
   "diagnosis": {
     "issues": [{ "field": "string", "severity": "low|medium|high", "issue": "string", "suggestion": "string" }],
