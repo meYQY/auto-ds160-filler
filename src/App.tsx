@@ -1,240 +1,278 @@
 import { useState, useEffect, useRef } from 'react';
 import { AIService } from './services/ai';
-import { DS160FormData } from './types/ds160';
-import { Settings, MessageSquare, ClipboardCheck, Play, Trash2 } from 'lucide-react';
+import { DS160FormData, AIAnalysisResult } from './types/ds160';
+import { saveToStorage, loadFromStorage, clearStorage } from './utils/storage';
+
+// Current extension version
+const VERSION = "1.0.4";
 
 function App() {
-  const [activeTab, setActiveTab] = useState<'chat' | 'form' | 'settings'>('chat');
-  const [apiKey, setApiKey] = useState('');
   const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  // Fix: Initialize with partial empty object cast as DS160FormData
-  const [formData, setFormData] = useState<DS160FormData>({} as DS160FormData);
+  const [apiKey, setApiKey] = useState('');
+  const [loading, setLoading] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
-  const logEndRef = useRef<HTMLDivElement>(null);
+  const [formData, setFormData] = useState<DS160FormData | null>(null);
+  const [analysis, setAnalysis] = useState<AIAnalysisResult | null>(null);
+  const [view, setView] = useState<'chat' | 'form' | 'settings'>('chat');
+  const logsEndRef = useRef<HTMLDivElement>(null);
+
+  const aiService = new AIService(apiKey);
 
   useEffect(() => {
-    chrome.storage.sync.get(['openai_key'], (result) => {
-      if (result.openai_key) setApiKey(result.openai_key);
+    loadFromStorage().then(data => {
+      if (data.apiKey) setApiKey(data.apiKey);
+      if (data.formData) setFormData(data.formData);
     });
     
-    // Check for saved form data (optional persistence)
-    chrome.storage.local.get(['ds160_data'], (result) => {
-        if (result.ds160_data) {
-            setFormData(result.ds160_data);
-            setLogs(prev => [...prev, "Loaded saved session data."]);
-        }
-    });
+    addLog(`Auto DS-160 Filler v${VERSION} initialized.`);
+    addLog('System ready. Waiting for input...');
   }, []);
 
-  // Auto-scroll logs
   useEffect(() => {
-    logEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (logsEndRef.current) {
+      logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [logs]);
 
-  // Auto-save form data
   useEffect(() => {
-      if (Object.keys(formData).length > 0) {
-        chrome.storage.local.set({ ds160_data: formData });
-      }
+    if (formData) {
+      saveToStorage({ formData });
+    }
   }, [formData]);
 
-  const handleSaveKey = () => {
-    chrome.storage.sync.set({ openai_key: apiKey }, () => {
-      setLogs(prev => [...prev, "API Key saved locally."]);
-    });
+  const addLog = (msg: string) => {
+    const time = new Date().toLocaleTimeString('en-US', { hour12: false });
+    setLogs(prev => [...prev, `[${time}] ${msg}`]);
   };
 
-  const handleClearData = () => {
-      if (confirm("Are you sure you want to clear all form data?")) {
-          setFormData({} as DS160FormData);
-          chrome.storage.local.remove(['ds160_data']);
-          setLogs(prev => [...prev, "Form data cleared."]);
-      }
-  };
-
-  const handleAISubmit = async () => {
+  const handleAnalyze = async () => {
     if (!apiKey) {
-      setActiveTab('settings');
-      setLogs(prev => [...prev, "Please set API Key first."]);
+      alert('Please set your API Key in Settings first!');
+      setView('settings');
       return;
     }
-    if (!input.trim()) return;
 
-    setIsLoading(true);
+    setLoading(true);
+    addLog('Starting AI analysis...');
+    
     try {
-      const ai = new AIService(apiKey);
-      setLogs(prev => [...prev, "Analyzing input..."]);
-      const { data, diagnosis } = await ai.parseAndDiagnose(input, formData);
-      
-      // Merge data deep
-      setFormData(prev => {
-          const newData = { ...prev };
-          // Simple deep merge for sections
-          for (const [key, val] of Object.entries(data)) {
-              // @ts-ignore
-              newData[key] = { ...newData[key], ...val };
-          }
-          return newData;
-      });
-
-      setLogs(prev => [...prev, `AI: ${diagnosis.summary}`]);
-      setActiveTab('form');
-      setInput(''); // Clear input after successful parse
-    } catch (e: any) {
-      setLogs(prev => [...prev, `Error: ${e.message}`]);
+      const { data, diagnosis } = await aiService.parseAndDiagnose(input, formData || undefined);
+      setFormData(data);
+      setAnalysis(diagnosis);
+      addLog(`AI Analysis: ${diagnosis.summary}`);
+      addLog('Data extraction completed successfully.');
+      setView('form');
+    } catch (error: any) {
+      addLog(`Error: ${error.message}`);
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  const handleAutoFill = async () => {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab.id) {
-        setLogs(prev => [...prev, "Error: No active tab found."]);
-        return;
-    }
-
-    setLogs(prev => [...prev, "Sending fill command..."]);
+  const handleFill = async () => {
+    if (!formData) return;
     
+    addLog('Initiating auto-fill sequence...');
     try {
-      chrome.tabs.sendMessage(tab.id, {
-        action: "FILL_FORM",
-        data: formData
-      }, (response) => {
-          if (chrome.runtime.lastError) {
-               setLogs(prev => [...prev, "Connection failed. Please reload the page."]);
-               return;
-          }
-          if (response && response.status === 'success') {
-              setLogs(prev => [...prev, response.message]);
-          } else if (response && response.status === 'error') {
-              setLogs(prev => [...prev, `Fail: ${response.message}`]);
-          }
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!tab.id) throw new Error('No active tab found');
+
+      if (!tab.url?.includes('ceac.state.gov')) {
+         addLog('Warning: Target page is not ceac.state.gov. Attempting anyway...');
+      }
+
+      const response = await chrome.tabs.sendMessage(tab.id, { 
+        action: 'FILL_FORM', 
+        data: formData 
       });
-    } catch (e) {
-      setLogs(prev => [...prev, "Failed to send command."]);
+
+      if (response && response.status === 'success') {
+        addLog(`Success: ${response.message}`);
+      } else if (response && response.status === 'warning') {
+        addLog(`Warning: ${response.message}`);
+      } else {
+        addLog(`Error: ${response?.message || 'Unknown error'}`);
+      }
+    } catch (error: any) {
+      addLog(`Connection failed. Please reload the target page.`);
     }
+  };
+
+  const handleClear = async () => {
+    if (confirm('Are you sure you want to clear all data?')) {
+      setFormData(null);
+      setAnalysis(null);
+      setLogs([]);
+      await clearStorage();
+      addLog('Session data cleared.');
+    }
+  };
+
+  const handleExport = () => {
+      if (!formData) return;
+      const blob = new Blob([JSON.stringify(formData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `ds160-data-${new Date().toISOString().slice(0,10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      addLog('Data exported to JSON file.');
+  };
+
+  const saveSettings = () => {
+    saveToStorage({ apiKey });
+    addLog('Configuration saved.');
+    setView('chat');
   };
 
   return (
-    <div className="flex flex-col h-full bg-white">
+    <div className="w-[400px] min-h-[500px] bg-gray-50 flex flex-col text-sm font-sans">
       {/* Header */}
-      <div className="bg-blue-900 text-white p-4 shadow-md flex justify-between items-center">
-        <h1 className="text-lg font-bold flex items-center gap-2">
-          <ClipboardCheck className="w-5 h-5" />
-          Auto DS-160 Filler
-        </h1>
-        <div className="text-xs bg-blue-800 px-2 py-1 rounded">v1.0</div>
-      </div>
+      <header className="bg-blue-600 text-white p-4 shadow-md flex justify-between items-center">
+        <div>
+          <h1 className="text-lg font-bold">Auto DS-160 Filler</h1>
+          <p className="text-xs opacity-90">Powered by GPT-5.1</p>
+        </div>
+        <div className="text-xs bg-blue-700 px-2 py-1 rounded">v{VERSION}</div>
+      </header>
 
       {/* Tabs */}
-      <div className="flex border-b bg-gray-50">
-        <button onClick={() => setActiveTab('chat')} className={`flex-1 p-3 transition-colors ${activeTab === 'chat' ? 'border-b-2 border-blue-600 text-blue-600 bg-white' : 'text-gray-500 hover:bg-gray-100'}`}>
-          <MessageSquare className="w-5 h-5 mx-auto" />
+      <div className="flex border-b bg-white">
+        <button 
+          onClick={() => setView('chat')}
+          className={`flex-1 p-3 font-medium ${view === 'chat' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:bg-gray-50'}`}
+        >
+          Chat
         </button>
-        <button onClick={() => setActiveTab('form')} className={`flex-1 p-3 transition-colors ${activeTab === 'form' ? 'border-b-2 border-blue-600 text-blue-600 bg-white' : 'text-gray-500 hover:bg-gray-100'}`}>
-          <ClipboardCheck className="w-5 h-5 mx-auto" />
+        <button 
+          onClick={() => setView('form')}
+          className={`flex-1 p-3 font-medium ${view === 'form' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:bg-gray-50'}`}
+        >
+          Form Data
         </button>
-        <button onClick={() => setActiveTab('settings')} className={`flex-1 p-3 transition-colors ${activeTab === 'settings' ? 'border-b-2 border-blue-600 text-blue-600 bg-white' : 'text-gray-500 hover:bg-gray-100'}`}>
-          <Settings className="w-5 h-5 mx-auto" />
+        <button 
+          onClick={() => setView('settings')}
+          className={`flex-1 p-3 font-medium ${view === 'settings' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:bg-gray-50'}`}
+        >
+          Settings
         </button>
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-auto p-4">
-        {activeTab === 'chat' && (
-          <div className="space-y-4">
-            <div className="bg-blue-50 p-3 rounded text-sm text-blue-800 border border-blue-100">
-              <p className="font-semibold mb-1">How to use:</p>
-              <p>Paste your resume, passport details, or just type naturally.</p>
-              <p className="italic mt-1 text-xs opacity-75">"Born 1990-01-01 in Beijing, Passport E12345678..."</p>
-            </div>
-            <textarea 
-              className="w-full h-40 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none resize-none text-sm"
-              placeholder="Type or paste your info here..."
+      <main className="flex-1 p-4 overflow-y-auto">
+        
+        {/* CHAT VIEW */}
+        {view === 'chat' && (
+          <div className="flex flex-col h-full space-y-3">
+            <textarea
               value={input}
-              onChange={e => setInput(e.target.value)}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Describe your personal info, passport details, and travel plans here..."
+              className="flex-1 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+              disabled={loading}
             />
-            <button 
-              onClick={handleAISubmit}
-              disabled={isLoading}
-              className="w-full bg-blue-600 text-white py-2.5 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2 font-medium transition-all"
+            <button
+              onClick={handleAnalyze}
+              disabled={loading || !input.trim()}
+              className={`w-full py-2 px-4 rounded-lg text-white font-medium transition-colors ${
+                loading || !input.trim() ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
+              }`}
             >
-              {isLoading ? (
-                  <>
-                    <span className="animate-spin">↻</span> Processing...
-                  </>
-              ) : "Analyze & Extract"}
+              {loading ? 'Processing...' : 'Analyze & Extract'}
             </button>
           </div>
         )}
 
-        {activeTab === 'form' && (
-          <div className="space-y-4 h-full flex flex-col">
-            <div className="flex justify-between items-center">
-                <h3 className="text-sm font-bold text-gray-700">Extracted Data</h3>
-                <button onClick={handleClearData} className="text-red-500 hover:text-red-700 text-xs flex items-center gap-1">
-                    <Trash2 className="w-3 h-3" /> Clear
-                </button>
+        {/* FORM DATA VIEW */}
+        {view === 'form' && (
+          <div className="space-y-4">
+             {analysis && (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                <h3 className="font-semibold text-green-800 mb-1 flex items-center">
+                   <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                   Analysis Complete
+                </h3>
+                <p className="text-green-700">{analysis.summary}</p>
+              </div>
+            )}
+
+            <div className="bg-white border rounded-lg p-3 shadow-sm max-h-[300px] overflow-auto">
+              <pre className="text-xs text-gray-600 font-mono whitespace-pre-wrap">
+                {formData ? JSON.stringify(formData, null, 2) : 'No data extracted yet.'}
+              </pre>
             </div>
-            
-            <div className="flex-1 bg-gray-50 p-2 rounded border overflow-auto text-xs font-mono shadow-inner">
-              {Object.keys(formData).length === 0 ? (
-                  <div className="text-gray-400 text-center mt-10">No data yet.<br/>Go to Chat to import.</div>
-              ) : (
-                  <pre>{JSON.stringify(formData, null, 2)}</pre>
-              )}
+
+            <div className="flex space-x-2">
+              <button
+                onClick={handleFill}
+                disabled={!formData}
+                className={`flex-1 py-3 px-4 rounded-lg text-white font-bold text-lg shadow transition-transform active:scale-95 ${
+                  !formData ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'
+                }`}
+              >
+                Auto-Fill Page
+              </button>
+              <button
+                 onClick={handleExport}
+                 className="px-3 py-3 border border-blue-200 text-blue-600 rounded-lg hover:bg-blue-50"
+                 title="Export Data"
+              >
+                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+              </button>
+              <button
+                 onClick={handleClear}
+                 className="px-3 py-3 border border-red-200 text-red-600 rounded-lg hover:bg-red-50"
+                 title="Clear Data"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+              </button>
             </div>
-            <button 
-              onClick={handleAutoFill}
-              disabled={Object.keys(formData).length === 0}
-              className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 flex justify-center items-center gap-2 font-bold shadow-lg shadow-green-100 disabled:opacity-50 disabled:shadow-none transition-all"
-            >
-              <Play className="w-5 h-5" />
-              Auto-Fill Page
-            </button>
-            <p className="text-[10px] text-gray-400 text-center">
-                Navigate to a DS-160 section (e.g. Personal Info) before clicking.
-            </p>
           </div>
         )}
 
-        {activeTab === 'settings' && (
+        {/* SETTINGS VIEW */}
+        {view === 'settings' && (
           <div className="space-y-4">
             <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">OpenAI API Key</label>
-                <input 
-                type="password" 
+              <label className="block text-gray-700 font-medium mb-1">OpenAI API Key</label>
+              <input
+                type="password"
                 value={apiKey}
-                onChange={e => setApiKey(e.target.value)}
-                className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                onChange={(e) => setApiKey(e.target.value)}
                 placeholder="sk-..."
-                />
-                <p className="text-xs text-gray-500 mt-1">Required for GPT-5.1 intelligence.</p>
+                className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Your key is stored locally in your browser. We never access it.
+              </p>
             </div>
-            
-            <button onClick={handleSaveKey} className="w-full px-4 py-2 bg-gray-800 text-white rounded hover:bg-gray-900 text-sm transition-colors">
+            <button
+              onClick={saveSettings}
+              className="w-full py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+            >
               Save Configuration
             </button>
             
-            <div className="border-t pt-4 mt-4">
-                <h4 className="text-xs font-bold text-gray-500 uppercase mb-2">Privacy Check</h4>
-                <div className="text-xs text-gray-400 space-y-1">
-                    <p>✓ Keys stored in chrome.storage.local</p>
-                    <p>✓ Direct communication with OpenAI</p>
-                    <p>✓ No analytics or tracking</p>
-                </div>
+            <div className="pt-4 border-t">
+                <p className="text-xs text-gray-400 text-center">
+                    Auto DS-160 Filler is an open source project.<br/>
+                    Not affiliated with the US Department of State.
+                </p>
             </div>
           </div>
         )}
-      </div>
+      </main>
 
-      {/* Logs */}
-      <div className="bg-gray-900 text-green-400 p-2 text-[10px] font-mono h-20 overflow-auto border-t border-gray-800">
-        {logs.length === 0 && <div className="opacity-50">&gt; Ready.</div>}
-        {logs.map((log, i) => <div key={i} className="whitespace-nowrap">{`> ${log}`}</div>)}
-        <div ref={logEndRef} />
+      {/* Logs Console */}
+      <div className="bg-gray-900 text-gray-300 p-2 text-xs font-mono h-32 overflow-y-auto border-t border-gray-700">
+        {logs.length === 0 && <div className="opacity-50 italic">System ready...</div>}
+        {logs.map((log, i) => (
+          <div key={i} className="mb-1 border-b border-gray-800 pb-1 last:border-0">
+             <span className="text-blue-400 mr-1">&gt;</span> {log}
+          </div>
+        ))}
+        <div ref={logsEndRef} />
       </div>
     </div>
   );
