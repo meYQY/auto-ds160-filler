@@ -104,6 +104,7 @@ This project is currently in **Developer Preview**.
 - [x] Security Questions (Basic Support)
 - [ ] Photo Validation Helper
 - [ ] PDF Export
+- [ ] Community Plugins
 
 ## Development & Debugging
 
