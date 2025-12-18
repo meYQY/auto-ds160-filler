@@ -3,14 +3,22 @@ import { FIELD_SELECTORS } from '../lib/selectors';
 // Helper: Find element by partial ID match (Fuzzy Search)
 function findElementByPartialId(partialId: string): HTMLElement | null {
   // 1. Try strict suffix match (common in ASP.NET: ..._tbxAPP_SURNAME)
-  let el = document.querySelector(`[id$='_${partialId}']`);
+  // Optimization: Use getElementById if possible, but ASP.NET IDs are dynamic prefix
+  // Using querySelector is fine, but let's optimize the selector if possible
+  
+  // Try precise ID match first (fastest)
+  let el = document.getElementById(partialId); 
+  if (el) return el;
+
+  // Suffix match
+  el = document.querySelector(`[id$='_${partialId}']`);
   if (el) return el as HTMLElement;
 
-  // 2. Try contains match
+  // Contains match (fallback)
   el = document.querySelector(`[id*='${partialId}']`);
   if (el) return el as HTMLElement;
 
-  // 3. Try name attribute (for radio buttons)
+  // Name attribute match (for radio/checkbox groups)
   el = document.querySelector(`[name*='${partialId}']`);
   if (el) return el as HTMLElement;
 
@@ -18,7 +26,8 @@ function findElementByPartialId(partialId: string): HTMLElement | null {
 }
 
 // Helper to wait for elements with fuzzy matching
-function waitForElement(partialId: string, timeout = 3000): Promise<HTMLElement | null> {
+// Optimized: Added polling fallback for robustness
+function waitForElement(partialId: string, timeout = 5000): Promise<HTMLElement | null> {
   return new Promise((resolve) => {
     const element = findElementByPartialId(partialId);
     if (element) {
@@ -38,7 +47,18 @@ function waitForElement(partialId: string, timeout = 3000): Promise<HTMLElement 
       subtree: true
     });
 
+    // Fallback polling just in case MutationObserver misses deep changes
+    const interval = setInterval(() => {
+        const el = findElementByPartialId(partialId);
+        if (el) {
+            clearInterval(interval);
+            observer.disconnect();
+            resolve(el);
+        }
+    }, 500);
+
     setTimeout(() => {
+      clearInterval(interval);
       observer.disconnect();
       // Try one last time
       resolve(findElementByPartialId(partialId));
@@ -96,14 +116,9 @@ async function fillField(selectorDef: any, value: string, type: 'text' | 'select
       let targetVal = mappedValue;
       if (typeof mappedValue === 'boolean') targetVal = mappedValue ? 'Y' : 'N';
 
-      // For RadioButtonList, the main element is usually a table or span. 
-      // We need to find the input child with the correct value.
-      // Or if we found the input directly via name match:
       if (element.tagName === 'INPUT' && (element as HTMLInputElement).value === targetVal) {
           element.click();
       } else {
-          // Look for sibling/child radio with specific value
-          // Common ASP.NET pattern: Name is same, ID differs
           const name = (element as HTMLInputElement).name;
           if (name) {
               const radio = document.querySelector(`input[name='${name}'][value='${targetVal}']`) as HTMLInputElement;
@@ -185,7 +200,6 @@ async function handleFillRequest(data: any) {
        if (dateParts.length === 3) {
          await fillField(dateSelector.year, dateParts[0], 'select');
          await sleep(100);
-         // DS-160 expects "1", "2", etc. for day/month, not "01", "02"
          await fillField(dateSelector.month, parseInt(dateParts[1]).toString(), 'select'); 
          await sleep(100);
          await fillField(dateSelector.day, parseInt(dateParts[2]).toString(), 'select');
